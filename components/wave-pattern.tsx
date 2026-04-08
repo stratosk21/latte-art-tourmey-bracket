@@ -45,11 +45,13 @@ export function WavePattern({
       // Determine stroke color from CSS variable or prop
       const strokeColor =
         color ||
-        getComputedStyle(document.documentElement).getPropertyValue("--wave").trim() ||
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--wave")
+          .trim() ||
         "#8b9dff";
 
       ctx.strokeStyle = strokeColor;
-      ctx.lineWidth = 0.6;
+      ctx.lineWidth = 1.0;
       ctx.globalAlpha = opacity;
 
       const step = h / density;
