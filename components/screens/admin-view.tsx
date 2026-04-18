@@ -1,34 +1,133 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { Plus, Edit2, Trash2, CheckCircle2, Clock, Zap } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { WavePattern } from "@/components/wave-pattern";
+import { useState } from 'react'
+import { Trash2, Zap, Clock, Shuffle } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { WavePattern } from '@/components/wave-pattern'
+import { createClient } from '@/lib/supabase/client'
+import type { Throwdown, Match, Submission } from '@/lib/supabase/types'
 
-const managedMatches = [
-  { id: "M-044", teamA: "Cerulean Cup", teamB: "TBD", stage: "Quarterfinal", date: "2026-03-03", time: "18:00", status: "scheduled" },
-  { id: "M-045", teamA: "Vertex Brew", teamB: "Hollow Bloom", stage: "Quarterfinal", date: "2026-03-03", time: "20:00", status: "scheduled" },
-  { id: "M-046", teamA: "Drift Milk", teamB: "Null Rosette", stage: "Quarterfinal", date: "2026-03-04", time: "14:00", status: "scheduled" },
-  { id: "M-041", teamA: "Phantom Edge", teamB: "Iron Circuit", stage: "Quarterfinal", date: "2026-03-01", time: "16:00", status: "completed" },
-  { id: "M-042", teamA: "Neon Pour", teamB: "Static Bloom", stage: "Quarterfinal", date: "2026-03-03", time: "12:00", status: "live" },
-];
+interface AdminViewProps {
+  throwdowns: Throwdown[]
+  initialMatches: Match[]
+  initialThrowdownId: string | null
+}
 
-const stages = ["Qualifying", "Top 16", "Quarterfinal", "Semifinal", "Grand Final"];
-const teams = ["Phantom Edge", "Iron Circuit", "Neon Pour", "Static Bloom", "Zero Kelvin", "Apex Roast", "Cerulean Cup", "Vertex Brew", "Hollow Bloom", "Drift Milk", "Null Rosette", "TBD"];
+function cryptoShuffle<T>(array: T[]): T[] {
+  const arr = [...array]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const buf = new Uint32Array(1)
+    crypto.getRandomValues(buf)
+    const j = buf[0] % (i + 1)
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
+}
 
-export function AdminView() {
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    teamA: "",
-    teamB: "",
-    stage: "Quarterfinal",
-    date: "",
-    time: "",
-  });
+export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: AdminViewProps) {
+  const [selectedThrowdownId, setSelectedThrowdownId] = useState<string | null>(initialThrowdownId)
+  const [matches, setMatches] = useState<Match[]>(initialMatches)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const liveCount = matches.filter(m => !m.winner_id).length
+  const completedCount = matches.filter(m => m.winner_id !== null).length
+
+  async function handleThrowdownChange(throwdownId: string) {
+    setSelectedThrowdownId(throwdownId)
+    setError(null)
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('matches')
+      .select(`
+        *,
+        submission_a:submission_a_id(*, profile:profile_id(*)),
+        submission_b:submission_b_id(*, profile:profile_id(*)),
+        winner:winner_id(*, profile:profile_id(*))
+      `)
+      .eq('throwdown_id', throwdownId)
+      .order('round', { ascending: true })
+      .order('position', { ascending: true })
+    if (error) { setError(`Failed to load matches: ${error.message}`); return }
+    setMatches(data ?? [])
+  }
+
+  async function handleGeneratePairings() {
+    if (!selectedThrowdownId) return
+    setError(null)
+    setLoading(true)
+
+    const supabase = createClient()
+
+    const { data: submissions } = await supabase
+      .from('submissions')
+      .select('*, profile:profile_id(*)')
+      .eq('throwdown_id', selectedThrowdownId)
+
+    if (!submissions || submissions.length === 0) {
+      setError('No submissions found for this throwdown.')
+      setLoading(false)
+      return
+    }
+
+    if (submissions.length % 2 !== 0) {
+      setError(`Cannot generate pairings: ${submissions.length} submissions is not an even number.`)
+      setLoading(false)
+      return
+    }
+
+    const nextRound = matches.length > 0 ? Math.max(...matches.map(m => m.round)) + 1 : 1
+    const shuffled = cryptoShuffle(submissions as Submission[])
+    const pairs = []
+    for (let i = 0; i < shuffled.length; i += 2) {
+      pairs.push({
+        throwdown_id: selectedThrowdownId,
+        round: nextRound,
+        position: i / 2 + 1,
+        submission_a_id: shuffled[i].id,
+        submission_b_id: shuffled[i + 1].id,
+      })
+    }
+
+    const { error: insertError } = await supabase.from('matches').insert(pairs)
+    if (insertError) {
+      setError(`Failed to create matches: ${insertError.message}`)
+      setLoading(false)
+      return
+    }
+
+    await handleThrowdownChange(selectedThrowdownId)
+    setLoading(false)
+  }
+
+  async function handleDeleteMatch(matchId: string) {
+    const supabase = createClient()
+    const { error } = await supabase.from('matches').delete().eq('id', matchId)
+    if (error) { setError(`Failed to delete match: ${error.message}`); return }
+    setMatches(prev => prev.filter(m => m.id !== matchId))
+  }
+
+  async function handleSetWinner(matchId: string, winnerId: string) {
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('matches')
+      .update({ winner_id: winnerId })
+      .eq('id', matchId)
+      .select(`
+        *,
+        submission_a:submission_a_id(*, profile:profile_id(*)),
+        submission_b:submission_b_id(*, profile:profile_id(*)),
+        winner:winner_id(*, profile:profile_id(*))
+      `)
+      .single()
+    if (error) { setError(`Failed to set winner: ${error.message}`); return }
+    if (data) {
+      setMatches(prev => prev.map(m => m.id === matchId ? data : m))
+    }
+  }
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
       <div className="relative h-36 overflow-hidden border-b border-border bg-primary/5">
         <div className="absolute inset-0">
           <WavePattern opacity={0.3} density={40} animated />
@@ -38,174 +137,133 @@ export function AdminView() {
             <p className="label-mono mb-1">Admin / Match Control</p>
             <h2 className="text-xl font-bold text-foreground">Match Management</h2>
           </div>
-          <p className="label-mono text-muted-foreground">
-            Create and manage throwdown matchups
-          </p>
+          <p className="label-mono text-muted-foreground">Create and manage throwdown matchups</p>
         </div>
       </div>
 
       <div className="p-8 space-y-6">
-        {/* Action bar */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 bg-card border border-border rounded-md px-3 py-2">
-              <Zap size={12} className="text-live" />
-              <span className="font-mono text-xs text-live">1 LIVE</span>
-            </div>
-            <div className="flex items-center gap-2 bg-card border border-border rounded-md px-3 py-2">
-              <Clock size={12} className="text-upcoming" />
-              <span className="font-mono text-xs text-upcoming">3 SCHEDULED</span>
-            </div>
-          </div>
-          <button
-            onClick={() => setShowForm((v) => !v)}
-            className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
+        {/* Throwdown selector */}
+        <div className="flex items-center gap-4">
+          <label className="label-mono shrink-0">Throwdown</label>
+          <select
+            value={selectedThrowdownId ?? ''}
+            onChange={e => handleThrowdownChange(e.target.value)}
+            className="bg-card border border-border rounded-md px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
           >
-            <Plus size={14} />
-            New Match
-          </button>
+            <option value="">Select throwdown...</option>
+            {throwdowns.map(t => (
+              <option key={t.id} value={t.id}>{t.title}</option>
+            ))}
+          </select>
         </div>
 
-        {/* Create match form */}
-        {showForm && (
-          <div className="bg-card border border-primary/30 rounded-lg p-6 space-y-5">
+        {selectedThrowdownId && (
+          <>
+            {/* Action bar */}
             <div className="flex items-center justify-between">
-              <h3 className="font-mono text-sm font-bold tracking-wider text-foreground">
-                CREATE NEW MATCH
-              </h3>
-              <span className="label-mono">FORM / DRAFT</span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <FormField label="Team A">
-                <select
-                  value={form.teamA}
-                  onChange={(e) => setForm((f) => ({ ...f, teamA: e.target.value }))}
-                  className="w-full bg-background border border-border rounded-md px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                >
-                  <option value="">Select team...</option>
-                  {teams.map((t) => <option key={t}>{t}</option>)}
-                </select>
-              </FormField>
-
-              <FormField label="Team B">
-                <select
-                  value={form.teamB}
-                  onChange={(e) => setForm((f) => ({ ...f, teamB: e.target.value }))}
-                  className="w-full bg-background border border-border rounded-md px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                >
-                  <option value="">Select team...</option>
-                  {teams.map((t) => <option key={t}>{t}</option>)}
-                </select>
-              </FormField>
-
-              <FormField label="Stage">
-                <select
-                  value={form.stage}
-                  onChange={(e) => setForm((f) => ({ ...f, stage: e.target.value }))}
-                  className="w-full bg-background border border-border rounded-md px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                >
-                  {stages.map((s) => <option key={s}>{s}</option>)}
-                </select>
-              </FormField>
-
-              <FormField label="Date">
-                <input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
-                  className="w-full bg-background border border-border rounded-md px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </FormField>
-
-              <FormField label="Start Time">
-                <input
-                  type="time"
-                  value={form.time}
-                  onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))}
-                  className="w-full bg-background border border-border rounded-md px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                />
-              </FormField>
-            </div>
-
-            <div className="flex items-center gap-3 pt-2">
-              <button className="flex-1 bg-primary text-primary-foreground py-2.5 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">
-                Create Match
-              </button>
-              <button
-                onClick={() => setShowForm(false)}
-                className="flex-1 bg-card border border-border text-foreground py-2.5 rounded-md text-sm font-medium hover:bg-muted transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Match list */}
-        <div className="bg-card border border-border rounded-lg overflow-hidden">
-          <div className="px-5 py-3 border-b border-border bg-muted/20 flex items-center justify-between">
-            <h3 className="font-mono text-xs font-bold tracking-widest text-muted-foreground">
-              ALL MANAGED MATCHES
-            </h3>
-            <span className="label-mono">{managedMatches.length} records</span>
-          </div>
-
-          <div className="divide-y divide-border">
-            {managedMatches.map((match) => (
-              <div key={match.id} className="flex items-center gap-4 px-5 py-4 hover:bg-muted/10 transition-colors">
-                <span className="font-mono text-xs text-muted-foreground w-14 shrink-0">{match.id}</span>
-
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {match.teamA} <span className="text-muted-foreground font-normal">vs</span> {match.teamB}
-                  </p>
-                  <p className="font-mono text-[10px] text-muted-foreground mt-0.5">
-                    {match.stage} · {match.date} at {match.time}
-                  </p>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 bg-card border border-border rounded-md px-3 py-2">
+                  <Zap size={12} className="text-live" />
+                  <span className="font-mono text-xs text-live">{liveCount} ACTIVE</span>
                 </div>
-
-                <StatusChip status={match.status} />
-
-                <div className="flex items-center gap-1 shrink-0">
-                  <button className="p-1.5 rounded hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
-                    <Edit2 size={13} />
-                  </button>
-                  <button className="p-1.5 rounded hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive">
-                    <Trash2 size={13} />
-                  </button>
+                <div className="flex items-center gap-2 bg-card border border-border rounded-md px-3 py-2">
+                  <Clock size={12} className="text-upcoming" />
+                  <span className="font-mono text-xs text-upcoming">{completedCount} COMPLETED</span>
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
+              <button
+                onClick={handleGeneratePairings}
+                disabled={loading}
+                className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                <Shuffle size={14} />
+                {loading ? 'Generating...' : 'Generate Pairings'}
+              </button>
+            </div>
+
+            {error && (
+              <div className="bg-destructive/10 border border-destructive/30 rounded-md px-4 py-3 text-sm text-destructive">
+                {error}
+              </div>
+            )}
+
+            {/* Match list */}
+            <div className="bg-card border border-border rounded-lg overflow-hidden">
+              <div className="px-5 py-3 border-b border-border bg-muted/20 flex items-center justify-between">
+                <h3 className="font-mono text-xs font-bold tracking-widest text-muted-foreground">
+                  ALL MATCHES
+                </h3>
+                <span className="label-mono">{matches.length} records</span>
+              </div>
+
+              <div className="divide-y divide-border">
+                {matches.length === 0 && (
+                  <div className="px-5 py-8 text-center text-sm text-muted-foreground">
+                    No matches yet. Generate pairings to start.
+                  </div>
+                )}
+                {matches.map(match => {
+                  const nameA = match.submission_a?.profile?.username ?? 'TBD'
+                  const nameB = match.submission_b?.profile?.username ?? 'TBD'
+                  const hasWinner = match.winner_id !== null
+
+                  return (
+                    <div key={match.id} className="flex items-center gap-4 px-5 py-4 hover:bg-muted/10 transition-colors">
+                      <span className="font-mono text-xs text-muted-foreground w-6 shrink-0">R{match.round}</span>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {nameA} <span className="text-muted-foreground font-normal">vs</span> {nameB}
+                        </p>
+                        <p className="font-mono text-[10px] text-muted-foreground mt-0.5">
+                          Position {match.position}{hasWinner ? ` · Winner: ${match.winner?.profile?.username}` : ''}
+                        </p>
+                      </div>
+
+                      {!hasWinner && match.submission_a_id && match.submission_b_id && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => handleSetWinner(match.id, match.submission_a_id!)}
+                            className="px-2 py-1 rounded text-[10px] font-mono bg-muted hover:bg-primary hover:text-primary-foreground transition-colors"
+                          >
+                            {nameA} wins
+                          </button>
+                          <button
+                            onClick={() => handleSetWinner(match.id, match.submission_b_id!)}
+                            className="px-2 py-1 rounded text-[10px] font-mono bg-muted hover:bg-primary hover:text-primary-foreground transition-colors"
+                          >
+                            {nameB} wins
+                          </button>
+                        </div>
+                      )}
+
+                      <StatusChip done={hasWinner} />
+
+                      <button
+                        onClick={() => handleDeleteMatch(match.id)}
+                        className="p-1.5 rounded hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive shrink-0"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
-  );
+  )
 }
 
-function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+function StatusChip({ done }: { done: boolean }) {
   return (
-    <div className="space-y-1.5">
-      <label className="label-mono">{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function StatusChip({ status }: { status: string }) {
-  return (
-    <span
-      className={cn(
-        "font-mono text-[9px] tracking-widest px-2 py-1 rounded shrink-0",
-        status === "live"
-          ? "bg-live/15 text-live"
-          : status === "completed"
-          ? "bg-muted text-muted-foreground"
-          : "bg-upcoming/15 text-upcoming"
-      )}
-    >
-      {status.toUpperCase()}
+    <span className={cn(
+      'font-mono text-[9px] tracking-widest px-2 py-1 rounded shrink-0',
+      done ? 'bg-muted text-muted-foreground' : 'bg-live/15 text-live'
+    )}>
+      {done ? 'DONE' : 'ACTIVE'}
     </span>
-  );
+  )
 }
