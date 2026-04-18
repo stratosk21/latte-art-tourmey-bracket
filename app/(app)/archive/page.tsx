@@ -4,7 +4,7 @@ import { PastMatchesView } from '@/components/screens/past-matches-view'
 export default async function ArchivePage() {
   const supabase = await createClient()
 
-  const { data: matches } = await supabase
+  const { data: matches, error } = await supabase
     .from('matches')
     .select(`
       *,
@@ -14,6 +14,8 @@ export default async function ArchivePage() {
     `)
     .not('winner_id', 'is', null)
     .order('created_at', { ascending: false })
+
+  if (error) throw error
 
   return <PastMatchesView matches={matches ?? []} />
 }

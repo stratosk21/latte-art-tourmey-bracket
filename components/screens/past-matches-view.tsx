@@ -31,7 +31,7 @@ function mapToHistorical(matches: Match[]): HistoricalMatch[] {
       participantB: m.submission_b?.profile?.username ?? 'Unknown',
       winner: m.winner?.profile?.username ?? 'Unknown',
       round: m.round,
-      date: m.created_at.split('T')[0],
+      date: new Date(m.created_at).toISOString().split('T')[0],
     }))
 }
 
@@ -91,7 +91,7 @@ export function PastMatchesView({ matches }: PastMatchesViewProps) {
         </div>
         <div className="relative z-10 h-full flex flex-col justify-between p-8">
           <div>
-            <p className="label-mono mb-1">Spring Throwdown 2026</p>
+            <p className="label-mono mb-1">Match Archive</p>
             <h2 className="text-xl font-bold text-foreground">Match Archive</h2>
           </div>
           <p className="label-mono">{allMatches.length} records / {filtered.length} shown</p>
