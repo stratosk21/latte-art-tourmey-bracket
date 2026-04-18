@@ -437,7 +437,7 @@ function useRoundMeasurements() {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-interface BracketViewProps {
+export interface BracketViewProps {
   rounds?: Round[]
   throwdownTitle?: string
 }

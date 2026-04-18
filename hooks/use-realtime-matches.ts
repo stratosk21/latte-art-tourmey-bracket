@@ -35,6 +35,7 @@ export function useRealtimeMatches(throwdownId: string, initialMatches: Match[])
       .subscribe()
 
     return () => {
+      channel.unsubscribe()
       supabase.removeChannel(channel)
     }
   }, [throwdownId])
