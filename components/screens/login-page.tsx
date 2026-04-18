@@ -1,18 +1,26 @@
-"use client";
+'use client'
 
-import { WavePattern } from "@/components/wave-pattern";
-import { Sun, Moon } from "lucide-react";
+import { WavePattern } from '@/components/wave-pattern'
+import { Sun, Moon } from 'lucide-react'
+import { useTheme } from 'next-themes'
+import { createClient } from '@/lib/supabase/client'
 
-interface LoginPageProps {
-  onLogin: () => void;
-  isDark: boolean;
-  onToggleTheme: () => void;
-}
+export function LoginPage() {
+  const { theme, setTheme } = useTheme()
+  const isDark = theme === 'dark'
 
-export function LoginPage({ onLogin, isDark, onToggleTheme }: LoginPageProps) {
+  async function handleDiscordLogin() {
+    const supabase = createClient()
+    await supabase.auth.signInWithOAuth({
+      provider: 'discord',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Top bar */}
       <header className="flex items-center justify-between px-8 py-5 border-b border-border">
         <div className="flex items-center gap-3">
           <span className="font-mono text-xs tracking-widest uppercase text-muted-foreground">
@@ -25,7 +33,7 @@ export function LoginPage({ onLogin, isDark, onToggleTheme }: LoginPageProps) {
         <div className="flex items-center gap-4">
           <span className="label-mono hidden md:block">Latte Art Tournament</span>
           <button
-            onClick={onToggleTheme}
+            onClick={() => setTheme(isDark ? 'light' : 'dark')}
             className="p-2 rounded-md border border-border hover:bg-muted transition-colors"
             aria-label="Toggle theme"
           >
@@ -34,9 +42,7 @@ export function LoginPage({ onLogin, isDark, onToggleTheme }: LoginPageProps) {
         </div>
       </header>
 
-      {/* Main content */}
       <main className="flex-1 grid md:grid-cols-2">
-        {/* Left panel — info */}
         <div className="flex flex-col justify-between p-10 md:p-16 border-r border-border">
           <div className="space-y-8">
             <div>
@@ -65,14 +71,8 @@ export function LoginPage({ onLogin, isDark, onToggleTheme }: LoginPageProps) {
                 </div>
               </div>
             </div>
-            <div>
-              <p className="label-mono mb-2">Status</p>
-              <p className="text-sm text-foreground">24 baristas registered</p>
-              <p className="text-sm text-muted-foreground">3 matches in progress</p>
-            </div>
           </div>
 
-          {/* Login block */}
           <div className="space-y-6">
             <div>
               <p className="label-mono mb-3">Access</p>
@@ -82,19 +82,11 @@ export function LoginPage({ onLogin, isDark, onToggleTheme }: LoginPageProps) {
             </div>
 
             <button
-              onClick={onLogin}
+              onClick={handleDiscordLogin}
               className="w-full flex items-center justify-center gap-3 bg-[#5865F2] hover:bg-[#4752c4] text-white py-3 px-6 rounded-md font-medium transition-colors"
             >
               <DiscordIcon />
               <span>Continue with Discord</span>
-            </button>
-
-            {/* Mock bypass for preview */}
-            <button
-              onClick={onLogin}
-              className="w-full text-center font-mono text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors tracking-wider"
-            >
-              SKIP — VIEW MOCK APP
             </button>
 
             <p className="font-mono text-[10px] text-muted-foreground/50 tracking-wider">
@@ -103,7 +95,6 @@ export function LoginPage({ onLogin, isDark, onToggleTheme }: LoginPageProps) {
           </div>
         </div>
 
-        {/* Right panel — wave art */}
         <div className="relative hidden md:flex items-center justify-center overflow-hidden bg-primary/5">
           <div className="absolute inset-0">
             <WavePattern opacity={0.55} density={72} animated />
@@ -126,7 +117,6 @@ export function LoginPage({ onLogin, isDark, onToggleTheme }: LoginPageProps) {
         </div>
       </main>
 
-      {/* Bottom bar */}
       <footer className="flex items-center justify-between px-8 py-3 border-t border-border">
         <div className="flex items-center gap-4">
           <div className="flex gap-0.5 items-end">
@@ -134,7 +124,7 @@ export function LoginPage({ onLogin, isDark, onToggleTheme }: LoginPageProps) {
               <div
                 key={i}
                 className="w-1.5 bg-foreground/40"
-                style={{ height: tall ? "16px" : "8px" }}
+                style={{ height: tall ? '16px' : '8px' }}
               />
             ))}
           </div>
@@ -143,7 +133,7 @@ export function LoginPage({ onLogin, isDark, onToggleTheme }: LoginPageProps) {
         <span className="label-mono hidden sm:block">PRINTED IN COMPETITIVE</span>
       </footer>
     </div>
-  );
+  )
 }
 
 function DiscordIcon() {
@@ -154,5 +144,5 @@ function DiscordIcon() {
         fill="currentColor"
       />
     </svg>
-  );
+  )
 }
