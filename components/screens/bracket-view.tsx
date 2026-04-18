@@ -468,12 +468,6 @@ export function BracketView({ rounds: propRounds, throwdownTitle }: BracketViewP
                 icon={<Swords size={11} />}
                 label="Single Elim"
               />
-              <FormatBtn
-                active={format === "double"}
-                onClick={() => setFormat("double")}
-                icon={<GitBranch size={11} />}
-                label="Double Elim"
-              />
             </div>
           </div>
           <div className="flex items-center gap-6">

@@ -22,14 +22,14 @@ export function DashboardHome({ throwdowns }: DashboardHomeProps) {
         <div className="relative z-10 h-full flex flex-col justify-between p-8">
           <div className="flex items-center justify-between">
             <div>
-              <p className="label-mono mb-1">Spring Throwdown 2026</p>
+              <p className="label-mono mb-1">Active Throwdowns</p>
               <h2 className="text-2xl font-bold text-foreground text-balance">
                 Tournament Overview
               </h2>
             </div>
             <div className="text-right">
               <p className="label-mono">BRACKET-REF</p>
-              <p className="font-mono text-xs text-muted-foreground">ST-2026</p>
+              <p className="font-mono text-xs text-muted-foreground">SEASON</p>
             </div>
           </div>
           {liveCount > 0 && (

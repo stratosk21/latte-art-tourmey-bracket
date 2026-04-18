@@ -7,7 +7,6 @@ import {
   LayoutGrid,
   History,
   ShieldCheck,
-  Users,
   LogOut,
   Sun,
   Moon,
@@ -27,7 +26,6 @@ const navItems = [
 
 const adminItems = [
   { href: '/admin', label: 'Match Control', icon: ShieldCheck, mono: '03' },
-  { href: '/admin/users', label: 'User Roles', icon: Users, mono: '04' },
 ]
 
 export function Sidebar({ isAdmin }: SidebarProps) {
@@ -38,7 +36,8 @@ export function Sidebar({ isAdmin }: SidebarProps) {
 
   async function handleSignOut() {
     const supabase = createClient()
-    await supabase.auth.signOut()
+    const { error } = await supabase.auth.signOut()
+    if (error) console.error('Sign out error:', error.message)
     router.push('/login')
   }
 
