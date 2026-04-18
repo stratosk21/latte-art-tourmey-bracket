@@ -37,7 +37,7 @@ export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: Ad
     setSelectedThrowdownId(throwdownId)
     setError(null)
     const supabase = createClient()
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('matches')
       .select(`
         *,
@@ -48,6 +48,7 @@ export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: Ad
       .eq('throwdown_id', throwdownId)
       .order('round', { ascending: true })
       .order('position', { ascending: true })
+    if (error) { setError(`Failed to load matches: ${error.message}`); return }
     setMatches(data ?? [])
   }
 
@@ -101,13 +102,14 @@ export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: Ad
 
   async function handleDeleteMatch(matchId: string) {
     const supabase = createClient()
-    await supabase.from('matches').delete().eq('id', matchId)
+    const { error } = await supabase.from('matches').delete().eq('id', matchId)
+    if (error) { setError(`Failed to delete match: ${error.message}`); return }
     setMatches(prev => prev.filter(m => m.id !== matchId))
   }
 
   async function handleSetWinner(matchId: string, winnerId: string) {
     const supabase = createClient()
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('matches')
       .update({ winner_id: winnerId })
       .eq('id', matchId)
@@ -118,6 +120,7 @@ export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: Ad
         winner:winner_id(*, profile:profile_id(*))
       `)
       .single()
+    if (error) { setError(`Failed to set winner: ${error.message}`); return }
     if (data) {
       setMatches(prev => prev.map(m => m.id === matchId ? data : m))
     }
