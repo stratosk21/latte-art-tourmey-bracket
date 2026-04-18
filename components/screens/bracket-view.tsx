@@ -24,7 +24,7 @@ interface BracketMatch {
   status: MatchStatus;
 }
 
-interface Round {
+export interface Round {
   label: string;
   matches: BracketMatch[];
 }
@@ -437,7 +437,12 @@ function useRoundMeasurements() {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function BracketView() {
+interface BracketViewProps {
+  rounds?: Round[]
+  throwdownTitle?: string
+}
+
+export function BracketView({ rounds: propRounds, throwdownTitle }: BracketViewProps = {}) {
   const [format, setFormat] = useState<Format>("single");
 
   return (
@@ -482,7 +487,7 @@ export function BracketView() {
 
       {/* Bracket canvas */}
       <div className="flex-1 overflow-auto p-8">
-        {format === "single" ? <SingleElimBracket /> : <DoubleElimBracket />}
+        {format === "single" ? <SingleElimBracket rounds={propRounds ?? singleBracket} /> : <DoubleElimBracket />}
       </div>
     </div>
   );
@@ -490,25 +495,25 @@ export function BracketView() {
 
 // ─── Single Elimination Layout ────────────────────────────────────────────────
 
-function SingleElimBracket() {
+function SingleElimBracket({ rounds }: { rounds: Round[] }) {
   const { colRefs, centers } = useRoundMeasurements();
   return (
     <div>
       <div className="flex items-start gap-0 min-w-max">
-        {singleBracket.map((round, ri) => (
+        {rounds.map((round, ri) => (
           <div key={round.label} className="flex items-start">
             <RoundColumn
               round={round}
               roundIndex={ri}
-              totalRounds={singleBracket.length}
+              totalRounds={rounds.length}
               colRef={(el) => {
                 colRefs.current[ri] = el;
               }}
             />
-            {ri < singleBracket.length - 1 && centers[ri]?.length > 0 && (
+            {ri < rounds.length - 1 && centers[ri]?.length > 0 && (
               <BracketConnector
                 fromCentersY={centers[ri]}
-                toCount={singleBracket[ri + 1].matches.length}
+                toCount={rounds[ri + 1].matches.length}
                 width={ROUND_GAP}
               />
             )}
