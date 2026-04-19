@@ -2,7 +2,10 @@
 -- Returns the new registration's uuid.
 CREATE OR REPLACE FUNCTION register_for_throwdown(p_throwdown_id uuid)
 RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER AS $register$
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $register$
 DECLARE
   v_max_participants  integer;
   v_opens_at          timestamptz;
@@ -14,7 +17,7 @@ DECLARE
 BEGIN
   SELECT max_participants, registration_opens_at, registration_closes_at
     INTO v_max_participants, v_opens_at, v_closes_at
-    FROM throwdowns
+    FROM public.throwdowns
     WHERE id = p_throwdown_id
     FOR UPDATE;
 
@@ -32,7 +35,7 @@ BEGIN
 
   v_count := (
     SELECT COUNT(*)
-    FROM registrations
+    FROM public.registrations
     WHERE throwdown_id = p_throwdown_id
       AND status = 'confirmed'
   );
@@ -45,7 +48,7 @@ BEGIN
     v_seed   := NULL;
   END IF;
 
-  INSERT INTO registrations (throwdown_id, profile_id, status, seed)
+  INSERT INTO public.registrations (throwdown_id, profile_id, status, seed)
   VALUES (p_throwdown_id, auth.uid(), v_status, v_seed)
   ON CONFLICT (throwdown_id, profile_id) DO NOTHING
   RETURNING id INTO v_id;
@@ -58,7 +61,11 @@ $register$;
 -- Trigger function: auto-promotes the oldest waitlist entry when a confirmed
 -- registration is deleted (user withdraws or admin removes).
 CREATE OR REPLACE FUNCTION promote_waitlist()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $promote$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $promote$
 DECLARE
   v_max_participants  integer;
   v_count             integer;
@@ -67,28 +74,28 @@ BEGIN
 
   SELECT max_participants
     INTO v_max_participants
-    FROM throwdowns
+    FROM public.throwdowns
     WHERE id = OLD.throwdown_id;
 
   IF v_max_participants IS NULL THEN RETURN OLD; END IF;
 
   v_count := (
     SELECT COUNT(*)
-    FROM registrations
+    FROM public.registrations
     WHERE throwdown_id = OLD.throwdown_id
       AND status = 'confirmed'
   );
 
   IF v_count < v_max_participants THEN
-    UPDATE registrations
+    UPDATE public.registrations
     SET status = 'confirmed',
         seed = (
           SELECT COALESCE(MAX(seed), 0) + 1
-          FROM registrations
+          FROM public.registrations
           WHERE throwdown_id = OLD.throwdown_id AND status = 'confirmed'
         )
     WHERE id = (
-      SELECT id FROM registrations
+      SELECT id FROM public.registrations
       WHERE throwdown_id = OLD.throwdown_id AND status = 'waitlist'
       ORDER BY registered_at ASC LIMIT 1
     );
@@ -98,5 +105,5 @@ END;
 $promote$;
 
 CREATE TRIGGER on_registration_delete
-  AFTER DELETE ON registrations
+  AFTER DELETE ON public.registrations
   FOR EACH ROW EXECUTE FUNCTION promote_waitlist();
