@@ -42,22 +42,26 @@ export function CreateThrowdownDialog({ open, onClose }: CreateThrowdownDialogPr
     setError(null)
     setLoading(true)
     const supabase = createClient()
-    const { error: insertError } = await supabase.from('throwdowns').insert({
-      title: title.trim(),
-      description: description.trim() || null,
-      format,
-      max_participants: maxParticipants ? parseInt(maxParticipants, 10) : null,
-      registration_opens_at: registrationOpensAt || null,
-      registration_closes_at: registrationClosesAt || null,
-      status: 'upcoming',
-    })
+    const { data: newThrowdown, error: insertError } = await supabase
+      .from('throwdowns')
+      .insert({
+        title: title.trim(),
+        description: description.trim() || null,
+        format,
+        max_participants: maxParticipants ? parseInt(maxParticipants, 10) : null,
+        registration_opens_at: registrationOpensAt || null,
+        registration_closes_at: registrationClosesAt || null,
+        status: 'upcoming',
+      })
+      .select('id')
+      .single()
     if (insertError) {
       setError(insertError.message)
       setLoading(false)
       return
     }
-    router.refresh()
     handleClose()
+    router.push(`/throwdown/${newThrowdown.id}`)
     setLoading(false)
   }
 

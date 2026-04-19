@@ -42,9 +42,18 @@ export function ThrowdownBracket({ throwdown, initialMatches }: ThrowdownBracket
   const matches = useRealtimeMatches(throwdown.id, initialMatches)
   const rounds = useMemo(() => matchesToRounds(matches), [matches])
 
+  if (rounds.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <p className="font-mono text-sm text-muted-foreground mb-1">No bracket yet</p>
+        <p className="text-xs text-muted-foreground">Generate pairings from the Registrants tab to create the bracket.</p>
+      </div>
+    )
+  }
+
   return (
     <BracketView
-      rounds={rounds.length > 0 ? rounds : undefined}
+      rounds={rounds}
       throwdownTitle={throwdown.title}
     />
   )

@@ -51,7 +51,8 @@ export function RegistrantsView({
   const [registrations, setRegistrations] = useState<Registration[]>(initialRegistrations)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<FilterTab>('all')
-  const [loading, setLoading] = useState(false)
+  const [joinLoading, setJoinLoading] = useState(false)
+  const [pairingLoading, setPairingLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const confirmedCount = registrations.filter(r => r.status === 'confirmed').length
@@ -80,30 +81,30 @@ export function RegistrantsView({
 
   async function handleJoin() {
     setError(null)
-    setLoading(true)
+    setJoinLoading(true)
     const supabase = createClient()
     const { data: rawReg, error: rpcError } = await supabase.rpc('register_for_throwdown', {
       p_throwdown_id: throwdown.id,
     })
-    if (rpcError) { setError(rpcError.message); setLoading(false); return }
+    if (rpcError) { setError(rpcError.message); setJoinLoading(false); return }
     const { data: reg } = await supabase
       .from('registrations')
       .select('*, profile:profile_id(*)')
       .eq('id', rawReg as string)
       .single()
     if (reg) setRegistrations(prev => [...prev, reg as Registration])
-    setLoading(false)
+    setJoinLoading(false)
   }
 
   async function handleLeave() {
     if (!myRegistration) return
     setError(null)
-    setLoading(true)
+    setJoinLoading(true)
     const supabase = createClient()
     const { error: delError } = await supabase.from('registrations').delete().eq('id', myRegistration.id)
-    if (delError) { setError(delError.message); setLoading(false); return }
+    if (delError) { setError(delError.message); setJoinLoading(false); return }
     setRegistrations(prev => prev.filter(r => r.id !== myRegistration.id))
-    setLoading(false)
+    setJoinLoading(false)
   }
 
   async function handleRemove(regId: string) {
@@ -116,13 +117,13 @@ export function RegistrantsView({
 
   async function handleGeneratePairings() {
     setError(null)
-    setLoading(true)
+    setPairingLoading(true)
     const supabase = createClient()
 
     const confirmed = registrations.filter(r => r.status === 'confirmed')
     if (confirmed.length < 2) {
       setError('Need at least 2 confirmed registrants.')
-      setLoading(false)
+      setPairingLoading(false)
       return
     }
 
@@ -139,7 +140,7 @@ export function RegistrantsView({
 
     if (subError || !submissions) {
       setError(`Failed to create participant records: ${subError?.message}`)
-      setLoading(false)
+      setPairingLoading(false)
       return
     }
 
@@ -172,12 +173,12 @@ export function RegistrantsView({
 
     if (matchError) {
       setError(`Failed to create matches: ${matchError.message}`)
-      setLoading(false)
+      setPairingLoading(false)
       return
     }
 
     onPairingsGenerated(newMatches ?? [])
-    setLoading(false)
+    setPairingLoading(false)
   }
 
   const filterTabs: { key: FilterTab; label: string; count: number }[] = [
@@ -209,26 +210,28 @@ export function RegistrantsView({
                   : throwdown.registration_closes_at
                   ? `Closes ${formatDate(throwdown.registration_closes_at)}`
                   : 'Registration open'
-                : 'Registration closed'}
+                : throwdown.registration_opens_at && new Date(throwdown.registration_opens_at) > new Date()
+                  ? `Opens ${formatDate(throwdown.registration_opens_at)}`
+                  : 'Registration closed'}
             </p>
-            {!isAdmin && !myRegistration && registrationOpen && (
+            {!myRegistration && registrationOpen && (
               <button
                 onClick={handleJoin}
-                disabled={loading}
+                disabled={joinLoading}
                 className="flex items-center gap-2 bg-primary text-primary-foreground px-3 py-2 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 <UserPlus size={14} />
-                {atCapacity ? 'Join Waitlist' : 'Join'}
+                {joinLoading ? 'Joining...' : atCapacity ? 'Join Waitlist' : 'Join'}
               </button>
             )}
-            {!isAdmin && myRegistration && registrationOpen && (
+            {myRegistration && registrationOpen && (
               <button
                 onClick={handleLeave}
-                disabled={loading}
+                disabled={joinLoading}
                 className="flex items-center gap-2 border border-border px-3 py-2 rounded-md text-sm hover:bg-muted transition-colors disabled:opacity-50"
               >
                 <UserMinus size={14} />
-                Leave
+                {joinLoading ? 'Leaving...' : 'Leave'}
               </button>
             )}
           </div>
@@ -289,11 +292,11 @@ export function RegistrantsView({
             </p>
             <button
               onClick={handleGeneratePairings}
-              disabled={loading || confirmedCount < 2 || hasExistingMatches}
+              disabled={pairingLoading || confirmedCount < 2 || hasExistingMatches}
               className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               <Shuffle size={14} />
-              {loading ? 'Generating...' : 'Generate Pairings'}
+              {pairingLoading ? 'Generating...' : 'Generate Pairings'}
             </button>
           </div>
         )}
