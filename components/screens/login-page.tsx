@@ -3,11 +3,14 @@
 import { WavePattern } from '@/components/wave-pattern'
 import { Sun, Moon } from 'lucide-react'
 import { useTheme } from 'next-themes'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 export function LoginPage() {
   const { theme, setTheme } = useTheme()
-  const isDark = theme === 'dark'
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  const isDark = mounted ? theme === 'dark' : true
 
   async function handleDiscordLogin() {
     const supabase = createClient()
@@ -44,42 +47,19 @@ export function LoginPage() {
 
       <main className="flex-1 grid md:grid-cols-2">
         <div className="flex flex-col justify-between p-10 md:p-16 border-r border-border">
-          <div className="space-y-8">
+          <div className="space-y-6">
             <div>
-              <p className="label-mono mb-2">Series</p>
-              <p className="text-sm text-foreground">Spring Throwdown 2026</p>
-              <p className="text-sm text-muted-foreground">Regional Open</p>
-            </div>
-            <div>
-              <p className="label-mono mb-3">Format</p>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-primary font-bold">01</span>
-                  <span className="text-sm font-semibold text-foreground">Qualifying Round (Active)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-muted-foreground">02</span>
-                  <span className="text-sm text-muted-foreground">Top 16 Bracket</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-muted-foreground">03</span>
-                  <span className="text-sm text-muted-foreground">Semifinals</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs text-muted-foreground">04</span>
-                  <span className="text-sm text-muted-foreground">Grand Final</span>
-                </div>
-              </div>
+              <h2 className="font-display text-3xl font-semibold tracking-tight text-foreground">
+                Spring Throwdown <em>2026</em>
+              </h2>
+              <p className="text-sm text-muted-foreground mt-2">Regional latte art open · 24 baristas competing</p>
             </div>
           </div>
 
           <div className="space-y-6">
-            <div>
-              <p className="label-mono mb-3">Access</p>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Sign in with your Discord account to view live brackets, track past throwdowns, and follow your favourite baristas.
-              </p>
-            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Sign in with Discord to view live brackets, track past throwdowns, and follow your favourite baristas.
+            </p>
 
             <button
               onClick={handleDiscordLogin}
@@ -88,10 +68,6 @@ export function LoginPage() {
               <DiscordIcon />
               <span>Continue with Discord</span>
             </button>
-
-            <p className="font-mono text-[10px] text-muted-foreground/50 tracking-wider">
-              THROWDOWN-2026 / AUTH-V1 / DISCORD-OAUTH2
-            </p>
           </div>
         </div>
 
@@ -117,21 +93,6 @@ export function LoginPage() {
         </div>
       </main>
 
-      <footer className="flex items-center justify-between px-8 py-3 border-t border-border">
-        <div className="flex items-center gap-4">
-          <div className="flex gap-0.5 items-end">
-            {[1,0,1,1,0,1,0,0,1,1,0,1,1,0,0,1,0,1,1,0,1,0,1,1,0,1,0,0].map((tall, i) => (
-              <div
-                key={i}
-                className="w-1.5 bg-foreground/40"
-                style={{ height: tall ? '16px' : '8px' }}
-              />
-            ))}
-          </div>
-          <span className="label-mono">THROWDOWN-SYS-V1</span>
-        </div>
-        <span className="label-mono hidden sm:block">PRINTED IN COMPETITIVE</span>
-      </footer>
     </div>
   )
 }

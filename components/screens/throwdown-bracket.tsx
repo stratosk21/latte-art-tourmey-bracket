@@ -27,7 +27,7 @@ function matchesToRounds(matches: Match[]): Round[] {
       matches: roundMatches
         .sort((a, b) => a.position - b.position)
         .map(m => ({
-          id: m.id,
+          id: `R${round}-${m.position}`,
           a: { name: m.submission_a?.profile?.username ?? 'TBD' },
           b: { name: m.submission_b?.profile?.username ?? 'TBD' },
           winner: m.winner_id

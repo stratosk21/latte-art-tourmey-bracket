@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Space_Grotesk, Space_Mono } from 'next/font/google'
+import { Space_Grotesk, Space_Mono, Fraunces } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { ThemeProvider } from '@/components/providers/theme-provider'
 import './globals.css'
@@ -12,6 +12,12 @@ const spaceMono = Space_Mono({
   subsets: ["latin"],
   weight: ["400", "700"],
   variable: "--font-mono",
+})
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-display",
+  axes: ["SOFT", "WONK"],
+  style: ["normal", "italic"],
 })
 
 export const metadata: Metadata = {
@@ -33,7 +39,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body suppressHydrationWarning className={`${spaceGrotesk.variable} ${spaceMono.variable} font-sans antialiased`}>
+      <body suppressHydrationWarning className={`${spaceGrotesk.variable} ${spaceMono.variable} ${fraunces.variable} font-sans antialiased`}>
         <ThemeProvider>
           {children}
         </ThemeProvider>

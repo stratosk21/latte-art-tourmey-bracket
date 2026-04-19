@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/screens/sidebar'
+import { NavigationProvider, ProgressBar } from '@/components/navigation-progress'
+import { PageTransition } from '@/components/page-transition'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -15,11 +17,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .single()
 
   return (
-    <div className="h-screen bg-background text-foreground flex overflow-hidden">
-      <Sidebar isAdmin={profile?.is_admin ?? false} />
-      <main className="flex-1 min-w-0 overflow-auto">
-        {children}
-      </main>
-    </div>
+    <NavigationProvider>
+      <div className="h-screen bg-background text-foreground flex overflow-hidden">
+        <ProgressBar />
+        <Sidebar isAdmin={profile?.is_admin ?? false} />
+        <PageTransition>
+          {children}
+        </PageTransition>
+      </div>
+    </NavigationProvider>
   )
 }
