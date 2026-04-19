@@ -67,39 +67,50 @@ SECURITY DEFINER
 SET search_path = public
 AS $promote$
 DECLARE
-  v_max_participants  integer;
-  v_count             integer;
+  _limit                    integer;
+  _current_confirmed_count  integer;
+  _next_in_line_id          uuid;
 BEGIN
-  IF OLD.status != 'confirmed' THEN RETURN OLD; END IF;
+  IF OLD.status != 'confirmed' THEN
+    RETURN OLD;
+  END IF;
 
-  SELECT max_participants
-    INTO v_max_participants
+  SELECT max_participants INTO _limit
     FROM public.throwdowns
-    WHERE id = OLD.throwdown_id;
+    WHERE id = OLD.throwdown_id
+    FOR UPDATE;
 
-  IF v_max_participants IS NULL THEN RETURN OLD; END IF;
+  IF _limit IS NULL THEN
+    RETURN OLD;
+  END IF;
 
-  v_count := (
-    SELECT COUNT(*)
+  SELECT COUNT(*) INTO _current_confirmed_count
     FROM public.registrations
     WHERE throwdown_id = OLD.throwdown_id
-      AND status = 'confirmed'
-  );
+      AND status = 'confirmed';
 
-  IF v_count < v_max_participants THEN
-    UPDATE public.registrations
-    SET status = 'confirmed',
-        seed = (
-          SELECT COALESCE(MAX(seed), 0) + 1
-          FROM public.registrations
-          WHERE throwdown_id = OLD.throwdown_id AND status = 'confirmed'
-        )
-    WHERE id = (
-      SELECT id FROM public.registrations
-      WHERE throwdown_id = OLD.throwdown_id AND status = 'waitlist'
-      ORDER BY registered_at ASC LIMIT 1
-    );
+  IF _current_confirmed_count < _limit THEN
+    SELECT id INTO _next_in_line_id
+      FROM public.registrations
+      WHERE throwdown_id = OLD.throwdown_id
+        AND status = 'waitlist'
+      ORDER BY registered_at ASC
+      LIMIT 1
+      FOR UPDATE SKIP LOCKED;
+
+    IF _next_in_line_id IS NOT NULL THEN
+      UPDATE public.registrations
+        SET status = 'confirmed',
+            seed = (
+              SELECT COALESCE(MAX(seed), 0) + 1
+                FROM public.registrations
+                WHERE throwdown_id = OLD.throwdown_id
+                  AND status = 'confirmed'
+            )
+        WHERE id = _next_in_line_id;
+    END IF;
   END IF;
+
   RETURN OLD;
 END;
 $promote$;
