@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import {
   LayoutGrid,
@@ -14,24 +14,29 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { useNavigation } from '@/components/navigation-progress'
+import { useRouter } from 'next/navigation'
 
 interface SidebarProps {
   isAdmin: boolean
 }
 
 const navItems = [
-  { href: '/dashboard', label: 'Overview', icon: LayoutGrid, mono: '01' },
-  { href: '/archive', label: 'Match Archive', icon: History, mono: '02' },
+  { href: '/dashboard', label: 'Overview', icon: LayoutGrid },
+  { href: '/archive', label: 'Match Archive', icon: History },
 ]
 
 const adminItems = [
-  { href: '/admin', label: 'Match Control', icon: ShieldCheck, mono: '03' },
+  { href: '/match-control', label: 'Match Control', icon: ShieldCheck },
 ]
 
 export function Sidebar({ isAdmin }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
+  const { pending, navigate } = useNavigation()
   const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
   const isDark = theme === 'dark'
 
   async function handleSignOut() {
@@ -39,6 +44,40 @@ export function Sidebar({ isAdmin }: SidebarProps) {
     const { error } = await supabase.auth.signOut()
     if (error) console.error('Sign out error:', error.message)
     router.push('/login')
+  }
+
+  function NavButton({
+    href,
+    label,
+    icon: Icon,
+  }: {
+    href: string
+    label: string
+    icon: React.ElementType
+  }) {
+    const active = pathname === href || pathname.startsWith(href + '/')
+    const isPend = pending === href && !active
+
+    return (
+      <button
+        onClick={() => navigate(href)}
+        className={cn(
+          'relative w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors overflow-hidden',
+          active
+            ? 'bg-sidebar-accent text-sidebar-primary font-medium'
+            : isPend
+            ? 'bg-sidebar-accent/50 text-sidebar-foreground/80'
+            : 'text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+        )}
+      >
+        {isPend && <div className="nav-pending-shimmer absolute inset-0" />}
+        <Icon size={14} className={cn('shrink-0 relative', !active && !isPend && 'opacity-60')} />
+        <span className="relative">{label}</span>
+        {isPend && (
+          <span className="nav-pending-dot relative ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
+        )}
+      </button>
+    )
   }
 
   return (
@@ -57,63 +96,19 @@ export function Sidebar({ isAdmin }: SidebarProps) {
         <p className="label-mono text-sidebar-foreground/40 mt-0.5">Spring 2026</p>
       </div>
 
-      {/* Live indicator */}
-      <div className="px-5 mb-6">
-        <div className="flex items-center gap-2 bg-live/10 border border-live/20 rounded-md px-3 py-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-live animate-pulse" />
-          <span className="font-mono text-[10px] text-live tracking-wider">LIVE</span>
-        </div>
-      </div>
-
       {/* Nav */}
       <nav className="flex-1 px-3 space-y-1">
         <p className="label-mono px-2 mb-2 text-sidebar-foreground/30">Navigation</p>
-        {navItems.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + '/')
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors',
-                active
-                  ? 'bg-sidebar-accent text-sidebar-primary font-medium'
-                  : 'text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-              )}
-            >
-              <span className="font-mono text-[9px] text-sidebar-foreground/30 w-5 shrink-0">
-                {item.mono}
-              </span>
-              <item.icon size={14} className="shrink-0" />
-              <span>{item.label}</span>
-            </Link>
-          )
-        })}
+        {navItems.map((item) => (
+          <NavButton key={item.href} {...item} />
+        ))}
 
         {isAdmin && (
           <div className="pt-4">
             <p className="label-mono px-2 mb-2 text-sidebar-foreground/30">Admin</p>
-            {adminItems.map((item) => {
-              const active = pathname === item.href
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors',
-                    active
-                      ? 'bg-sidebar-accent text-sidebar-primary font-medium'
-                      : 'text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-                  )}
-                >
-                  <span className="font-mono text-[9px] text-sidebar-foreground/30 w-5 shrink-0">
-                    {item.mono}
-                  </span>
-                  <item.icon size={14} className="shrink-0" />
-                  <span>{item.label}</span>
-                </Link>
-              )
-            })}
+            {adminItems.map((item) => (
+              <NavButton key={item.href} {...item} />
+            ))}
           </div>
         )}
       </nav>
@@ -124,8 +119,8 @@ export function Sidebar({ isAdmin }: SidebarProps) {
           onClick={() => setTheme(isDark ? 'light' : 'dark')}
           className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
         >
-          {isDark ? <Sun size={14} /> : <Moon size={14} />}
-          <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+          {mounted ? (isDark ? <Sun size={14} /> : <Moon size={14} />) : <Moon size={14} />}
+          <span>{mounted ? (isDark ? 'Light Mode' : 'Dark Mode') : 'Light Mode'}</span>
         </button>
         <button
           onClick={handleSignOut}
