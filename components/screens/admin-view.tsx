@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Trash2, Zap, Clock, Shuffle } from 'lucide-react'
+import { Trash2, Zap, Clock, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WavePattern } from '@/components/wave-pattern'
 import { createClient } from '@/lib/supabase/client'
-import type { Throwdown, Match, Submission } from '@/lib/supabase/types'
+import { CreateThrowdownDialog } from './create-throwdown-dialog'
+import type { Throwdown, Match } from '@/lib/supabase/types'
 
 interface AdminViewProps {
   throwdowns: Throwdown[]
@@ -13,22 +14,11 @@ interface AdminViewProps {
   initialThrowdownId: string | null
 }
 
-function cryptoShuffle<T>(array: T[]): T[] {
-  const arr = [...array]
-  for (let i = arr.length - 1; i > 0; i--) {
-    const buf = new Uint32Array(1)
-    crypto.getRandomValues(buf)
-    const j = buf[0] % (i + 1)
-    ;[arr[i], arr[j]] = [arr[j], arr[i]]
-  }
-  return arr
-}
-
 export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: AdminViewProps) {
   const [selectedThrowdownId, setSelectedThrowdownId] = useState<string | null>(initialThrowdownId)
   const [matches, setMatches] = useState<Match[]>(initialMatches)
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
 
   const liveCount = matches.filter(m => !m.winner_id).length
   const completedCount = matches.filter(m => m.winner_id !== null).length
@@ -52,54 +42,6 @@ export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: Ad
     setMatches(data ?? [])
   }
 
-  async function handleGeneratePairings() {
-    if (!selectedThrowdownId) return
-    setError(null)
-    setLoading(true)
-
-    const supabase = createClient()
-
-    const { data: submissions } = await supabase
-      .from('submissions')
-      .select('*, profile:profile_id(*)')
-      .eq('throwdown_id', selectedThrowdownId)
-
-    if (!submissions || submissions.length === 0) {
-      setError('No submissions found for this throwdown.')
-      setLoading(false)
-      return
-    }
-
-    if (submissions.length % 2 !== 0) {
-      setError(`Cannot generate pairings: ${submissions.length} submissions is not an even number.`)
-      setLoading(false)
-      return
-    }
-
-    const nextRound = matches.length > 0 ? Math.max(...matches.map(m => m.round)) + 1 : 1
-    const shuffled = cryptoShuffle(submissions as Submission[])
-    const pairs = []
-    for (let i = 0; i < shuffled.length; i += 2) {
-      pairs.push({
-        throwdown_id: selectedThrowdownId,
-        round: nextRound,
-        position: i / 2 + 1,
-        submission_a_id: shuffled[i].id,
-        submission_b_id: shuffled[i + 1].id,
-      })
-    }
-
-    const { error: insertError } = await supabase.from('matches').insert(pairs)
-    if (insertError) {
-      setError(`Failed to create matches: ${insertError.message}`)
-      setLoading(false)
-      return
-    }
-
-    await handleThrowdownChange(selectedThrowdownId)
-    setLoading(false)
-  }
-
   async function handleDeleteMatch(matchId: string) {
     const supabase = createClient()
     const { error } = await supabase.from('matches').delete().eq('id', matchId)
@@ -121,9 +63,7 @@ export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: Ad
       `)
       .single()
     if (error) { setError(`Failed to set winner: ${error.message}`); return }
-    if (data) {
-      setMatches(prev => prev.map(m => m.id === matchId ? data : m))
-    }
+    if (data) setMatches(prev => prev.map(m => m.id === matchId ? data : m))
   }
 
   return (
@@ -133,16 +73,24 @@ export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: Ad
           <WavePattern opacity={0.3} density={40} animated />
         </div>
         <div className="relative z-10 h-full flex flex-col justify-between p-8">
-          <div>
-            <p className="label-mono mb-1">Admin / Match Control</p>
-            <h2 className="text-xl font-bold text-foreground">Match Management</h2>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="label-mono mb-1">Admin / Match Control</p>
+              <h2 className="text-xl font-bold text-foreground">Match Management</h2>
+            </div>
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 bg-primary text-primary-foreground px-3 py-2 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              <Plus size={14} />
+              New Throwdown
+            </button>
           </div>
           <p className="label-mono text-muted-foreground">Create and manage throwdown matchups</p>
         </div>
       </div>
 
       <div className="p-8 space-y-6">
-        {/* Throwdown selector */}
         <div className="flex items-center gap-4">
           <label className="label-mono shrink-0">Throwdown</label>
           <select
@@ -159,26 +107,15 @@ export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: Ad
 
         {selectedThrowdownId && (
           <>
-            {/* Action bar */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 bg-card border border-border rounded-md px-3 py-2">
-                  <Zap size={12} className="text-live" />
-                  <span className="font-mono text-xs text-live">{liveCount} ACTIVE</span>
-                </div>
-                <div className="flex items-center gap-2 bg-card border border-border rounded-md px-3 py-2">
-                  <Clock size={12} className="text-upcoming" />
-                  <span className="font-mono text-xs text-upcoming">{completedCount} COMPLETED</span>
-                </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-card border border-border rounded-md px-3 py-2">
+                <Zap size={12} className="text-live" />
+                <span className="font-mono text-xs text-live">{liveCount} ACTIVE</span>
               </div>
-              <button
-                onClick={handleGeneratePairings}
-                disabled={loading}
-                className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2.5 rounded-md text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-              >
-                <Shuffle size={14} />
-                {loading ? 'Generating...' : 'Generate Pairings'}
-              </button>
+              <div className="flex items-center gap-2 bg-card border border-border rounded-md px-3 py-2">
+                <Clock size={12} className="text-upcoming" />
+                <span className="font-mono text-xs text-upcoming">{completedCount} COMPLETED</span>
+              </div>
             </div>
 
             {error && (
@@ -187,7 +124,6 @@ export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: Ad
               </div>
             )}
 
-            {/* Match list */}
             <div className="bg-card border border-border rounded-lg overflow-hidden">
               <div className="px-5 py-3 border-b border-border bg-muted/20 flex items-center justify-between">
                 <h3 className="font-mono text-xs font-bold tracking-widest text-muted-foreground">
@@ -199,7 +135,7 @@ export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: Ad
               <div className="divide-y divide-border">
                 {matches.length === 0 && (
                   <div className="px-5 py-8 text-center text-sm text-muted-foreground">
-                    No matches yet. Generate pairings to start.
+                    No matches yet. Go to the throwdown detail page to generate pairings.
                   </div>
                 )}
                 {matches.map(match => {
@@ -210,7 +146,6 @@ export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: Ad
                   return (
                     <div key={match.id} className="flex items-center gap-4 px-5 py-4 hover:bg-muted/10 transition-colors">
                       <span className="font-mono text-xs text-muted-foreground w-6 shrink-0">R{match.round}</span>
-
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">
                           {nameA} <span className="text-muted-foreground font-normal">vs</span> {nameB}
@@ -219,7 +154,6 @@ export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: Ad
                           Position {match.position}{hasWinner ? ` · Winner: ${match.winner?.profile?.username}` : ''}
                         </p>
                       </div>
-
                       {!hasWinner && match.submission_a_id && match.submission_b_id && (
                         <div className="flex items-center gap-1 shrink-0">
                           <button
@@ -236,9 +170,7 @@ export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: Ad
                           </button>
                         </div>
                       )}
-
                       <StatusChip done={hasWinner} />
-
                       <button
                         onClick={() => handleDeleteMatch(match.id)}
                         className="p-1.5 rounded hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive shrink-0"
@@ -253,6 +185,8 @@ export function AdminView({ throwdowns, initialMatches, initialThrowdownId }: Ad
           </>
         )}
       </div>
+
+      <CreateThrowdownDialog open={showCreate} onClose={() => setShowCreate(false)} />
     </div>
   )
 }
